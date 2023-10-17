@@ -1,0 +1,766 @@
+
+/home/odyssey/os/diy-x86os/start/start/build/source/loader/loader.elf：     文件格式 elf32-i386
+/home/odyssey/os/diy-x86os/start/start/build/source/loader/loader.elf
+体系结构：i386， 标志 0x00000112：
+EXEC_P, HAS_SYMS, D_PAGED
+起始地址 0x00008000
+
+程序头：
+    LOAD off    0x00000000 vaddr 0x00007000 paddr 0x00007000 align 2**12
+         filesz 0x000000d4 memsz 0x000000d4 flags r--
+    LOAD off    0x00001000 vaddr 0x00008000 paddr 0x00008000 align 2**12
+         filesz 0x00000514 memsz 0x00000514 flags r-x
+    LOAD off    0x00002000 vaddr 0x00009000 paddr 0x00009000 align 2**12
+         filesz 0x0000005d memsz 0x0000005d flags r--
+    LOAD off    0x00002060 vaddr 0x0000a060 paddr 0x0000a060 align 2**12
+         filesz 0x00000018 memsz 0x00000074 flags rw-
+   STACK off    0x00000000 vaddr 0x00000000 paddr 0x00000000 align 2**4
+         filesz 0x00000000 memsz 0x00000000 flags rwx
+
+节：
+Idx Name          Size      VMA       LMA       File off  Algn
+  0 .text         00000514  00008000  00008000  00001000  2**0
+                  CONTENTS, ALLOC, LOAD, READONLY, CODE
+  1 .rodata       0000005d  00009000  00009000  00002000  2**0
+                  CONTENTS, ALLOC, LOAD, READONLY, DATA
+  2 .data         00000018  0000a060  0000a060  00002060  2**2
+                  CONTENTS, ALLOC, LOAD, DATA
+  3 .bss          00000054  0000a080  0000a080  00002078  2**5
+                  ALLOC
+  4 .comment      0000002b  00000000  00000000  00002078  2**0
+                  CONTENTS, READONLY
+  5 .debug_aranges 00000060  00000000  00000000  000020a8  2**3
+                  CONTENTS, READONLY, DEBUGGING, OCTETS
+  6 .debug_info   0000063a  00000000  00000000  00002108  2**0
+                  CONTENTS, READONLY, DEBUGGING, OCTETS
+  7 .debug_abbrev 00000338  00000000  00000000  00002742  2**0
+                  CONTENTS, READONLY, DEBUGGING, OCTETS
+  8 .debug_line   000002eb  00000000  00000000  00002a7a  2**0
+                  CONTENTS, READONLY, DEBUGGING, OCTETS
+  9 .debug_frame  00000228  00000000  00000000  00002d68  2**2
+                  CONTENTS, READONLY, DEBUGGING, OCTETS
+ 10 .debug_str    000002e7  00000000  00000000  00002f90  2**0
+                  CONTENTS, READONLY, DEBUGGING, OCTETS
+ 11 .debug_line_str 00000156  00000000  00000000  00003277  2**0
+                  CONTENTS, READONLY, DEBUGGING, OCTETS
+SYMBOL TABLE:
+00000000 l    df *ABS*	00000000 loader_16.c
+00008018 l     F .text	0000002a inb
+00008042 l     F .text	00000030 outb
+00008072 l     F .text	0000000b cli
+0000807d l     F .text	00000036 lgdt
+000080b3 l     F .text	0000001a read_cr0
+000080cd l     F .text	00000012 write_cr0
+000080df l     F .text	0000002b far_jump
+0000810a l     F .text	0000003b show_msg
+00008145 l     F .text	0000014b detect_memory
+00008290 l     F .text	00000092 enter_protect_mode
+00000000 l    df *ABS*	00000000 loader_32.c
+00008345 l     F .text	0000001d inb
+00008362 l     F .text	0000001f inw
+00008381 l     F .text	00000021 outb
+000083a2 l     F .text	00000144 read_disk
+00008322 g     F .text	00000023 loader_entry
+0000a060 g     O .data	00000018 gdt_table
+000084e6 g     F .text	0000002e load_kernel
+0000a080 g     O .bss	00000054 boot_info
+00008000 g       .text	00000000 _start
+0000a078 g       .bss	00000000 __bss_start
+00008003 g       .text	00000000 protect_mode_entry
+0000a078 g       .data	00000000 _edata
+0000a0d4 g       .bss	00000000 _end
+
+
+
+Disassembly of section .text:
+
+00008000 <_start>:
+ 	.text
+	.global _start
+	.extern loader_entry //二级引导程序入口
+
+_start:
+	jmp loader_entry
+    8000:	e9 1f 03             	jmp    8322 <loader_entry>
+
+00008003 <protect_mode_entry>:
+	.code32 //32位代码,用于保护模式下运行
+	.text
+	.global protect_mode_entry
+	.extern load_kernel
+protect_mode_entry:
+	mov $0x10, %ax
+    8003:	66 b8 10 00 8e d8    	mov    $0xd88e0010,%eax
+	mov %ax, %ds
+	mov %ax, %ss
+    8009:	8e d0                	mov    %ax,%ss
+	mov %ax, %es
+    800b:	8e c0                	mov    %ax,%es
+	mov %ax, %fs
+    800d:	8e e0                	mov    %ax,%fs
+	mov %ax, %gs
+    800f:	8e e8                	mov    %ax,%gs
+
+    8011:	ea e6 84 00 00       	ljmp   $0x0,$0x84e6
+    8016:	08 00                	or     %al,(%bx,%si)
+
+00008018 <inb>:
+#define CPU_INSTR_H
+
+#include "types.h"
+//从端口寄存器读取八位数据 
+static inline uint8_t inb(uint16_t port)
+{
+    8018:	66 55                	push   %ebp
+    801a:	66 89 e5             	mov    %esp,%ebp
+    801d:	66 83 ec 14          	sub    $0x14,%esp
+    8021:	67 66 8b 45 08       	mov    0x8(%ebp),%eax
+    8026:	67 89 45 ec          	mov    %ax,-0x14(%ebp)
+    uint8_t rv;
+
+    // inb al,ad
+    __asm__ __volatile__("inb %[p], %[v]" : [v] "=a"(rv) : [p] "d"(port));
+    802a:	67 66 0f b7 45 ec    	movzwl -0x14(%ebp),%eax
+    8030:	66 89 c2             	mov    %eax,%edx
+    8033:	ec                   	in     (%dx),%al
+    8034:	67 88 45 ff          	mov    %al,-0x1(%ebp)
+    return rv;
+    8038:	67 66 0f b6 45 ff    	movzbl -0x1(%ebp),%eax
+}
+    803e:	66 c9                	leavel 
+    8040:	66 c3                	retl   
+
+00008042 <outb>:
+    __asm__ __volatile__("in %[p], %[v]" : [v] "=a"(rv) : [p] "d"(port));
+    return rv;
+}
+// 这个函数是用来写端口的，第一个参数是端口号，第二个参数是要写入的数据
+static inline void outb(uint16_t port, uint8_t data)
+{
+    8042:	66 55                	push   %ebp
+    8044:	66 89 e5             	mov    %esp,%ebp
+    8047:	66 83 ec 08          	sub    $0x8,%esp
+    804b:	67 66 8b 45 08       	mov    0x8(%ebp),%eax
+    8050:	67 66 8b 55 0c       	mov    0xc(%ebp),%edx
+    8055:	67 89 45 fc          	mov    %ax,-0x4(%ebp)
+    8059:	66 89 d0             	mov    %edx,%eax
+    805c:	67 88 45 f8          	mov    %al,-0x8(%ebp)
+    // outb al,dx
+    __asm__ __volatile__("outb %[v], %[p]" : : [v] "a"(data), [p] "d"(port));
+    8060:	67 66 0f b6 45 f8    	movzbl -0x8(%ebp),%eax
+    8066:	67 66 0f b7 55 fc    	movzwl -0x4(%ebp),%edx
+    806c:	ee                   	out    %al,(%dx)
+}
+    806d:	90                   	nop
+    806e:	66 c9                	leavel 
+    8070:	66 c3                	retl   
+
+00008072 <cli>:
+/**
+ *  @brief 关闭中断
+ * 
+ */
+static inline void cli(void)
+{
+    8072:	66 55                	push   %ebp
+    8074:	66 89 e5             	mov    %esp,%ebp
+    __asm__ __volatile__("cli");
+    8077:	fa                   	cli    
+}
+    8078:	90                   	nop
+    8079:	66 5d                	pop    %ebp
+    807b:	66 c3                	retl   
+
+0000807d <lgdt>:
+    __asm__ __volatile__("sti");
+}
+
+
+static inline void lgdt(uint32_t start, uint32_t size)
+{
+    807d:	66 55                	push   %ebp
+    807f:	66 89 e5             	mov    %esp,%ebp
+    8082:	66 83 ec 10          	sub    $0x10,%esp
+    {
+        uint16_t limit;             //GDT在内存中的界限值
+        uint16_t start15_0;         //GDT地址的低16位
+        uint16_t start31_16;        //GDT地址的高16位
+    }gdt;
+    gdt.start31_16 = (start >> 16) & 0xffff;     
+    8086:	67 66 8b 45 08       	mov    0x8(%ebp),%eax
+    808b:	66 c1 e8 10          	shr    $0x10,%eax
+    808f:	67 89 45 fe          	mov    %ax,-0x2(%ebp)
+    gdt.start15_0 = start & 0xffff;   
+    8093:	67 66 8b 45 08       	mov    0x8(%ebp),%eax
+    8098:	67 89 45 fc          	mov    %ax,-0x4(%ebp)
+    gdt.limit = size - 1;
+    809c:	67 66 8b 45 0c       	mov    0xc(%ebp),%eax
+    80a1:	66 83 e8 01          	sub    $0x1,%eax
+    80a5:	67 89 45 fa          	mov    %ax,-0x6(%ebp)
+    
+    __asm__ __volatile__("lgdt %[g]" : : [g] "m" (gdt));
+    80a9:	67 0f 01 55 fa       	lgdtw  -0x6(%ebp)
+}
+    80ae:	90                   	nop
+    80af:	66 c9                	leavel 
+    80b1:	66 c3                	retl   
+
+000080b3 <read_cr0>:
+
+/// @brief 读取cr0寄存器的值
+static inline uint32_t read_cr0 (void) {
+    80b3:	66 55                	push   %ebp
+    80b5:	66 89 e5             	mov    %esp,%ebp
+    80b8:	66 83 ec 10          	sub    $0x10,%esp
+    uint32_t cr0;
+
+    __asm__ __volatile__ ("mov %%cr0, %[v]" : [v] "=r"(cr0));
+    80bc:	0f 20 c0             	mov    %cr0,%eax
+    80bf:	67 66 89 45 fc       	mov    %eax,-0x4(%ebp)
+    return cr0;
+    80c4:	67 66 8b 45 fc       	mov    -0x4(%ebp),%eax
+}
+    80c9:	66 c9                	leavel 
+    80cb:	66 c3                	retl   
+
+000080cd <write_cr0>:
+
+/// @brief 写cr0寄存器的值
+
+static inline void write_cr0 (uint32_t data) {
+    80cd:	66 55                	push   %ebp
+    80cf:	66 89 e5             	mov    %esp,%ebp
+    __asm__ __volatile__ ("mov %[v], %%cr0" : : [v]"r"(data));
+    80d2:	67 66 8b 45 08       	mov    0x8(%ebp),%eax
+    80d7:	0f 22 c0             	mov    %eax,%cr0
+}
+    80da:	90                   	nop
+    80db:	66 5d                	pop    %ebp
+    80dd:	66 c3                	retl   
+
+000080df <far_jump>:
+
+/// @brief 远跳转
+static inline void far_jump (uint32_t selector, uint32_t offset) {
+    80df:	66 55                	push   %ebp
+    80e1:	66 89 e5             	mov    %esp,%ebp
+    80e4:	66 83 ec 10          	sub    $0x10,%esp
+    uint32_t addr[] = {offset, selector};
+    80e8:	67 66 8b 45 0c       	mov    0xc(%ebp),%eax
+    80ed:	67 66 89 45 f8       	mov    %eax,-0x8(%ebp)
+    80f2:	67 66 8b 45 08       	mov    0x8(%ebp),%eax
+    80f7:	67 66 89 45 fc       	mov    %eax,-0x4(%ebp)
+    __asm__ __volatile__ ("ljmpl *(%[a])" : : [a] "r" (addr));
+    80fc:	67 66 8d 45 f8       	lea    -0x8(%ebp),%eax
+    8101:	67 66 ff 28          	ljmpl  *(%eax)
+}
+    8105:	90                   	nop
+    8106:	66 c9                	leavel 
+    8108:	66 c3                	retl   
+
+0000810a <show_msg>:
+ * @brief 打印字符串
+ * 
+ * @param msg 传入信息
+ * @return int 是否成功
+ */
+static int show_msg (const char* msg) {
+    810a:	66 55                	push   %ebp
+    810c:	66 89 e5             	mov    %esp,%ebp
+    810f:	66 83 ec 10          	sub    $0x10,%esp
+    char c;
+
+    //内联汇编，调用BIOS的中断例程，显示字符
+    while((c=*msg++)!='\0'){
+    8113:	eb 0c                	jmp    8121 <show_msg+0x17>
+       __asm__ __volatile__(
+    8115:	67 66 0f b6 45 ff    	movzbl -0x1(%ebp),%eax
+    811b:	b4 0e                	mov    $0xe,%ah
+    811d:	88 c0                	mov    %al,%al
+    811f:	cd 10                	int    $0x10
+    while((c=*msg++)!='\0'){
+    8121:	67 66 8b 45 08       	mov    0x8(%ebp),%eax
+    8126:	67 66 8d 50 01       	lea    0x1(%eax),%edx
+    812b:	67 66 89 55 08       	mov    %edx,0x8(%ebp)
+    8130:	67 66 0f b6 00       	movzbl (%eax),%eax
+    8135:	67 88 45 ff          	mov    %al,-0x1(%ebp)
+    8139:	67 80 7d ff 00       	cmpb   $0x0,-0x1(%ebp)
+    813e:	75 d5                	jne    8115 <show_msg+0xb>
+            :[ch]"r"(c)   //将c的值放入寄存器a中
+       );
+    }
+
+
+}
+    8140:	90                   	nop
+    8141:	66 c9                	leavel 
+    8143:	66 c3                	retl   
+
+00008145 <detect_memory>:
+
+/// @brief  检测内存
+static void detect_memory(void) {
+    8145:	66 55                	push   %ebp
+    8147:	66 89 e5             	mov    %esp,%ebp
+    814a:	66 57                	push   %edi
+    814c:	66 56                	push   %esi
+    814e:	66 53                	push   %ebx
+    8150:	66 83 ec 30          	sub    $0x30,%esp
+    SMAP_entry_t smap_entry;
+    uint32_t signature = 0,bytes = 0,contID = 0;
+    8154:	67 66 c7 45 e8 00 00 	movl   $0x0,-0x18(%ebp)
+    815b:	00 00 
+    815d:	67 66 c7 45 e4 00 00 	movl   $0x0,-0x1c(%ebp)
+    8164:	00 00 
+    8166:	67 66 c7 45 f0 00 00 	movl   $0x0,-0x10(%ebp)
+    816d:	00 00 
+    SMAP_entry_t * entry = &smap_entry;
+    816f:	67 66 8d 45 c8       	lea    -0x38(%ebp),%eax
+    8174:	67 66 89 45 e0       	mov    %eax,-0x20(%ebp)
+    show_msg("Detecting memory...:\n");
+    8179:	66 68 00 90 00 00    	pushl  $0x9000
+    817f:	66 e8 85 ff ff ff    	calll  810a <show_msg>
+    8185:	66 83 c4 04          	add    $0x4,%esp
+
+    boot_info.ram_region_count = 0;
+    8189:	66 c7 06 d0 a0 00 00 	movl   $0x0,-0x5f30
+    8190:	00 00 
+    for (int i=0; i<BOOT_RAM_REGION_MAX; i++) {
+    8192:	67 66 c7 45 ec 00 00 	movl   $0x0,-0x14(%ebp)
+    8199:	00 00 
+    819b:	e9 c6 00             	jmp    8264 <detect_memory+0x11f>
+       
+
+     __asm__ __volatile__("int  $0x15"
+    819e:	66 b8 20 e8 00 00    	mov    $0xe820,%eax
+    81a4:	67 66 8b 5d f0       	mov    -0x10(%ebp),%ebx
+    81a9:	66 b9 18 00 00 00    	mov    $0x18,%ecx
+    81af:	66 ba 50 41 4d 53    	mov    $0x534d4150,%edx
+    81b5:	67 66 8b 75 e0       	mov    -0x20(%ebp),%esi
+    81ba:	66 89 f7             	mov    %esi,%edi
+    81bd:	cd 15                	int    $0x15
+    81bf:	66 89 da             	mov    %ebx,%edx
+    81c2:	67 66 89 45 e8       	mov    %eax,-0x18(%ebp)
+    81c7:	67 66 89 4d e4       	mov    %ecx,-0x1c(%ebp)
+    81cc:	67 66 89 55 f0       	mov    %edx,-0x10(%ebp)
+        : "=a"(signature),"=c"(bytes),"=b"(contID)
+        : "a"(0xE820),"b"(contID),"c"(24),"d"(0x534D4150),"D"(entry)
+     ); 
+
+     if(signature != 0x534D4150){
+    81d1:	67 66 81 7d e8 50 41 	cmpl   $0x534d4150,-0x18(%ebp)
+    81d8:	4d 53 
+    81da:	74 13                	je     81ef <detect_memory+0xaa>
+         show_msg("Detecting memory failed!\r\n");
+    81dc:	66 68 16 90 00 00    	pushl  $0x9016
+    81e2:	66 e8 22 ff ff ff    	calll  810a <show_msg>
+    81e8:	66 83 c4 04          	add    $0x4,%esp
+    81ec:	e9 92 00             	jmp    8281 <detect_memory+0x13c>
+         return;
+     }
+
+
+     if(bytes>20 && (entry->ACPI & 0x0001) == 0){
+    81ef:	67 66 83 7d e4 14    	cmpl   $0x14,-0x1c(%ebp)
+    81f5:	76 13                	jbe    820a <detect_memory+0xc5>
+    81f7:	67 66 8b 45 e0       	mov    -0x20(%ebp),%eax
+    81fc:	67 66 8b 40 14       	mov    0x14(%eax),%eax
+    8201:	66 83 e0 01          	and    $0x1,%eax
+    8205:	66 85 c0             	test   %eax,%eax
+    8208:	74 53                	je     825d <detect_memory+0x118>
+        continue;
+     }
+
+    if(entry->Type == 1){
+    820a:	67 66 8b 45 e0       	mov    -0x20(%ebp),%eax
+    820f:	67 66 8b 40 10       	mov    0x10(%eax),%eax
+    8214:	66 83 f8 01          	cmp    $0x1,%eax
+    8218:	75 39                	jne    8253 <detect_memory+0x10e>
+        boot_info.ram_region_cfg[boot_info.ram_region_count].start = entry->BaseL;   
+    821a:	66 a1 d0 a0          	mov    0xa0d0,%eax
+    821e:	67 66 8b 55 e0       	mov    -0x20(%ebp),%edx
+    8223:	67 66 8b 12          	mov    (%edx),%edx
+    8227:	67 66 89 14 c5 80 a0 	mov    %edx,0xa080(,%eax,8)
+    822e:	00 00 
+        boot_info.ram_region_cfg[boot_info.ram_region_count].size = entry->LengthL;
+    8230:	66 a1 d0 a0          	mov    0xa0d0,%eax
+    8234:	67 66 8b 55 e0       	mov    -0x20(%ebp),%edx
+    8239:	67 66 8b 52 08       	mov    0x8(%edx),%edx
+    823e:	67 66 89 14 c5 84 a0 	mov    %edx,0xa084(,%eax,8)
+    8245:	00 00 
+        boot_info.ram_region_count++;
+    8247:	66 a1 d0 a0          	mov    0xa0d0,%eax
+    824b:	66 83 c0 01          	add    $0x1,%eax
+    824f:	66 a3 d0 a0          	mov    %eax,0xa0d0
+
+    }
+    
+    if(contID == 0){
+    8253:	67 66 83 7d f0 00    	cmpl   $0x0,-0x10(%ebp)
+    8259:	74 15                	je     8270 <detect_memory+0x12b>
+    825b:	eb 01                	jmp    825e <detect_memory+0x119>
+        continue;
+    825d:	90                   	nop
+    for (int i=0; i<BOOT_RAM_REGION_MAX; i++) {
+    825e:	67 66 83 45 ec 01    	addl   $0x1,-0x14(%ebp)
+    8264:	67 66 83 7d ec 09    	cmpl   $0x9,-0x14(%ebp)
+    826a:	0f 8e 30 ff          	jle    819e <detect_memory+0x59>
+    826e:	eb 01                	jmp    8271 <detect_memory+0x12c>
+        break;
+    8270:	90                   	nop
+    }        
+}
+show_msg("Detecting memory done!\r\n");
+    8271:	66 68 31 90 00 00    	pushl  $0x9031
+    8277:	66 e8 8d fe ff ff    	calll  810a <show_msg>
+    827d:	66 83 c4 04          	add    $0x4,%esp
+
+}
+    8281:	67 66 8d 65 f4       	lea    -0xc(%ebp),%esp
+    8286:	66 5b                	pop    %ebx
+    8288:	66 5e                	pop    %esi
+    828a:	66 5f                	pop    %edi
+    828c:	66 5d                	pop    %ebp
+    828e:	66 c3                	retl   
+
+00008290 <enter_protect_mode>:
+};
+
+
+/// @brief  进入保护模式
+/// @param  
+static  void enter_protect_mode (void) {
+    8290:	66 55                	push   %ebp
+    8292:	66 89 e5             	mov    %esp,%ebp
+    8295:	66 83 ec 10          	sub    $0x10,%esp
+    //1、关闭中断
+    cli();  
+    8299:	66 e8 d3 fd ff ff    	calll  8072 <cli>
+
+    //2、设置A20，读取92端口的值，将其第2位置设为1
+    uint8_t v = inb(0x92);  
+    829f:	66 68 92 00 00 00    	pushl  $0x92
+    82a5:	66 e8 6d fd ff ff    	calll  8018 <inb>
+    82ab:	66 83 c4 04          	add    $0x4,%esp
+    82af:	67 88 45 ff          	mov    %al,-0x1(%ebp)
+    outb(0x92, v | 0x2);   
+    82b3:	67 66 0f b6 45 ff    	movzbl -0x1(%ebp),%eax
+    82b9:	66 83 c8 02          	or     $0x2,%eax
+    82bd:	66 0f b6 c0          	movzbl %al,%eax
+    82c1:	66 50                	push   %eax
+    82c3:	66 68 92 00 00 00    	pushl  $0x92
+    82c9:	66 e8 73 fd ff ff    	calll  8042 <outb>
+    82cf:	66 83 c4 08          	add    $0x8,%esp
+
+    //3、设置GDT表
+    lgdt((uint32_t)gdt_table, sizeof(gdt_table));  
+    82d3:	66 b8 60 a0 00 00    	mov    $0xa060,%eax
+    82d9:	66 6a 18             	pushl  $0x18
+    82dc:	66 50                	push   %eax
+    82de:	66 e8 99 fd ff ff    	calll  807d <lgdt>
+    82e4:	66 83 c4 08          	add    $0x8,%esp
+
+    //4、开启保护模式的使能位，设置cr0寄存器的第0位PE为1
+    uint32_t cr0 = read_cr0();  
+    82e8:	66 e8 c5 fd ff ff    	calll  80b3 <read_cr0>
+    82ee:	67 66 89 45 f8       	mov    %eax,-0x8(%ebp)
+    write_cr0(cr0 | 0x1);     
+    82f3:	67 66 8b 45 f8       	mov    -0x8(%ebp),%eax
+    82f8:	66 83 c8 01          	or     $0x1,%eax
+    82fc:	66 50                	push   %eax
+    82fe:	66 e8 c9 fd ff ff    	calll  80cd <write_cr0>
+    8304:	66 83 c4 04          	add    $0x4,%esp
+
+    /// @brief  5、远跳转到32为的loader程序，并清空原来的16位指令流水线
+    far_jump((1<<3), (uint32_t)protect_mode_entry);  
+    8308:	66 b8 03 80 00 00    	mov    $0x8003,%eax
+    830e:	66 50                	push   %eax
+    8310:	66 6a 08             	pushl  $0x8
+    8313:	66 e8 c6 fd ff ff    	calll  80df <far_jump>
+    8319:	66 83 c4 08          	add    $0x8,%esp
+
+}
+    831d:	90                   	nop
+    831e:	66 c9                	leavel 
+    8320:	66 c3                	retl   
+
+00008322 <loader_entry>:
+
+/// @brief  加载内核
+
+void loader_entry (void){
+    8322:	66 55                	push   %ebp
+    8324:	66 89 e5             	mov    %esp,%ebp
+    show_msg("\nello, OS kernel!\n");
+    8327:	66 68 4a 90 00 00    	pushl  $0x904a
+    832d:	66 e8 d7 fd ff ff    	calll  810a <show_msg>
+    8333:	66 83 c4 04          	add    $0x4,%esp
+    
+    //1、检测内存
+    detect_memory();
+    8337:	66 e8 08 fe ff ff    	calll  8145 <detect_memory>
+
+    //2、进入保护模式
+    enter_protect_mode();
+    833d:	66 e8 4d ff ff ff    	calll  8290 <enter_protect_mode>
+    
+    for(;;){}
+    8343:	eb fe                	jmp    8343 <loader_entry+0x21>
+
+00008345 <inb>:
+{
+    8345:	55                   	push   %bp
+    8346:	89 e5                	mov    %sp,%bp
+    8348:	83 ec 14             	sub    $0x14,%sp
+    834b:	8b 45 08             	mov    0x8(%di),%ax
+    834e:	66 89 45 ec          	mov    %eax,-0x14(%di)
+    __asm__ __volatile__("inb %[p], %[v]" : [v] "=a"(rv) : [p] "d"(port));
+    8352:	0f b7 45 ec          	movzww -0x14(%di),%ax
+    8356:	89 c2                	mov    %ax,%dx
+    8358:	ec                   	in     (%dx),%al
+    8359:	88 45 ff             	mov    %al,-0x1(%di)
+    return rv;
+    835c:	0f b6 45 ff          	movzbw -0x1(%di),%ax
+}
+    8360:	c9                   	leave  
+    8361:	c3                   	ret    
+
+00008362 <inw>:
+{
+    8362:	55                   	push   %bp
+    8363:	89 e5                	mov    %sp,%bp
+    8365:	83 ec 14             	sub    $0x14,%sp
+    8368:	8b 45 08             	mov    0x8(%di),%ax
+    836b:	66 89 45 ec          	mov    %eax,-0x14(%di)
+    __asm__ __volatile__("in %[p], %[v]" : [v] "=a"(rv) : [p] "d"(port));
+    836f:	0f b7 45 ec          	movzww -0x14(%di),%ax
+    8373:	89 c2                	mov    %ax,%dx
+    8375:	66 ed                	in     (%dx),%eax
+    8377:	66 89 45 fe          	mov    %eax,-0x2(%di)
+    return rv;
+    837b:	0f b7 45 fe          	movzww -0x2(%di),%ax
+}
+    837f:	c9                   	leave  
+    8380:	c3                   	ret    
+
+00008381 <outb>:
+{
+    8381:	55                   	push   %bp
+    8382:	89 e5                	mov    %sp,%bp
+    8384:	83 ec 08             	sub    $0x8,%sp
+    8387:	8b 45 08             	mov    0x8(%di),%ax
+    838a:	8b 55 0c             	mov    0xc(%di),%dx
+    838d:	66 89 45 fc          	mov    %eax,-0x4(%di)
+    8391:	89 d0                	mov    %dx,%ax
+    8393:	88 45 f8             	mov    %al,-0x8(%di)
+    __asm__ __volatile__("outb %[v], %[p]" : : [v] "a"(data), [p] "d"(port));
+    8396:	0f b6 45 f8          	movzbw -0x8(%di),%ax
+    839a:	0f b7 55 fc          	movzww -0x4(%di),%dx
+    839e:	ee                   	out    %al,(%dx)
+}
+    839f:	90                   	nop
+    83a0:	c9                   	leave  
+    83a1:	c3                   	ret    
+
+000083a2 <read_disk>:
+/// @param buf 数据存放的地址
+
+
+
+
+static void read_disk (uint32_t sector, uint16_t sector_count, uint8_t *buf) {
+    83a2:	55                   	push   %bp
+    83a3:	89 e5                	mov    %sp,%bp
+    83a5:	53                   	push   %bx
+    83a6:	83 ec 14             	sub    $0x14,%sp
+    83a9:	8b 45 0c             	mov    0xc(%di),%ax
+    83ac:	66 89 45 e8          	mov    %eax,-0x18(%di)
+
+    //1、设置以LBA模式进行读取，即将磁盘看作一片连续的扇区
+    outb(0x1F6, 0xE0);   //将寄存器第6位置设为1进入LBA模式，，第四位置0指定驱动器号为主盘
+    83b0:	68 e0 00             	push   $0xe0
+    83b3:	00 00                	add    %al,(%bx,%si)
+    83b5:	68 f6 01             	push   $0x1f6
+    83b8:	00 00                	add    %al,(%bx,%si)
+    83ba:	e8 c2 ff             	call   837f <inw+0x1d>
+    83bd:	ff                   	(bad)  
+    83be:	ff 83 c4 08          	incw   0x8c4(%bp,%di)
+
+    //2、初始化各个端口寄存器的高8位
+    outb(0x1F2, (uint8_t)(sector_count >> 8));    // 读取扇区数的高8位
+    83c2:	0f b7 45 e8          	movzww -0x18(%di),%ax
+    83c6:	66 c1 e8 08          	shr    $0x8,%eax
+    83ca:	0f b6 c0             	movzbw %al,%ax
+    83cd:	50                   	push   %ax
+    83ce:	68 f2 01             	push   $0x1f2
+    83d1:	00 00                	add    %al,(%bx,%si)
+    83d3:	e8 a9 ff             	call   837f <inw+0x1d>
+    83d6:	ff                   	(bad)  
+    83d7:	ff 83 c4 08          	incw   0x8c4(%bp,%di)
+                                                //6字节的LBA值，先初始化第456个字节
+                                                //暂时只用到哦了4个字节的LBA值，所以第56个字节置0即可
+    outb(0x1F3, (uint8_t)(sector_count >> 24));  //LBA4
+    83db:	0f b7 45 e8          	movzww -0x18(%di),%ax
+    83df:	c1 f8 18             	sar    $0x18,%ax
+    83e2:	0f b6 c0             	movzbw %al,%ax
+    83e5:	50                   	push   %ax
+    83e6:	68 f3 01             	push   $0x1f3
+    83e9:	00 00                	add    %al,(%bx,%si)
+    83eb:	e8 91 ff             	call   837f <inw+0x1d>
+    83ee:	ff                   	(bad)  
+    83ef:	ff 83 c4 08          	incw   0x8c4(%bp,%di)
+    outb(0x1F4, 0);                             //LBA5
+    83f3:	6a 00                	push   $0x0
+    83f5:	68 f4 01             	push   $0x1f4
+    83f8:	00 00                	add    %al,(%bx,%si)
+    83fa:	e8 82 ff             	call   837f <inw+0x1d>
+    83fd:	ff                   	(bad)  
+    83fe:	ff 83 c4 08          	incw   0x8c4(%bp,%di)
+    outb(0x1F5, 0);                             //LBA6
+    8402:	6a 00                	push   $0x0
+    8404:	68 f5 01             	push   $0x1f5
+    8407:	00 00                	add    %al,(%bx,%si)
+    8409:	e8 73 ff             	call   837f <inw+0x1d>
+    840c:	ff                   	(bad)  
+    840d:	ff 83 c4 08          	incw   0x8c4(%bp,%di)
+
+    
+    //3、初始化各个端口寄存器的低八位
+    outb(0x1F2, (uint8_t)sector_count );        //读取扇区数的低八位
+    8411:	0f b7 45 e8          	movzww -0x18(%di),%ax
+    8415:	0f b6 c0             	movzbw %al,%ax
+    8418:	50                   	push   %ax
+    8419:	68 f2 01             	push   $0x1f2
+    841c:	00 00                	add    %al,(%bx,%si)
+    841e:	e8 5e ff             	call   837f <inw+0x1d>
+    8421:	ff                   	(bad)  
+    8422:	ff 83 c4 08          	incw   0x8c4(%bp,%di)
+    outb(0x1F3, (uint8_t)sector);               //LBA1
+    8426:	8b 45 08             	mov    0x8(%di),%ax
+    8429:	0f b6 c0             	movzbw %al,%ax
+    842c:	50                   	push   %ax
+    842d:	68 f3 01             	push   $0x1f3
+    8430:	00 00                	add    %al,(%bx,%si)
+    8432:	e8 4a ff             	call   837f <inw+0x1d>
+    8435:	ff                   	(bad)  
+    8436:	ff 83 c4 08          	incw   0x8c4(%bp,%di)
+    outb(0x1F4, (uint8_t)sector >> 8);          //LBA2
+    843a:	8b 45 08             	mov    0x8(%di),%ax
+    843d:	0f b6 c0             	movzbw %al,%ax
+    8440:	c1 f8 08             	sar    $0x8,%ax
+    8443:	0f b6 c0             	movzbw %al,%ax
+    8446:	50                   	push   %ax
+    8447:	68 f4 01             	push   $0x1f4
+    844a:	00 00                	add    %al,(%bx,%si)
+    844c:	e8 30 ff             	call   837f <inw+0x1d>
+    844f:	ff                   	(bad)  
+    8450:	ff 83 c4 08          	incw   0x8c4(%bp,%di)
+    outb(0x1F5, (uint8_t)sector >> 16);         //LBA3
+    8454:	8b 45 08             	mov    0x8(%di),%ax
+    8457:	0f b6 c0             	movzbw %al,%ax
+    845a:	c1 f8 10             	sar    $0x10,%ax
+    845d:	0f b6 c0             	movzbw %al,%ax
+    8460:	50                   	push   %ax
+    8461:	68 f5 01             	push   $0x1f5
+    8464:	00 00                	add    %al,(%bx,%si)
+    8466:	e8 16 ff             	call   837f <inw+0x1d>
+    8469:	ff                   	(bad)  
+    846a:	ff 83 c4 08          	incw   0x8c4(%bp,%di)
+
+    //4、将读取扇区命令（0x24）发送到端口 0x1F7
+    outb(0x1F7, 0x24);
+    846e:	6a 24                	push   $0x24
+    8470:	68 f7 01             	push   $0x1f7
+    8473:	00 00                	add    %al,(%bx,%si)
+    8475:	e8 07 ff             	call   837f <inw+0x1d>
+    8478:	ff                   	(bad)  
+    8479:	ff 83 c4 08          	incw   0x8c4(%bp,%di)
+
+    //5、读取状态端口寄存器，判断是否可读，若可以则读取，否则阻塞等待
+
+    uint16_t* data_buf = (uint16_t*)buf;     //数据缓冲区，每次读取16位数据
+    847d:	8b 45 10             	mov    0x10(%di),%ax
+    8480:	89 45 f8             	mov    %ax,-0x8(%di)
+    while (sector_count--) {                
+    8483:	eb 4a                	jmp    84cf <read_disk+0x12d>
+        while((inb(0x1F7) & 0x88) != 0x8){
+    8485:	90                   	nop
+    8486:	68 f7 01             	push   $0x1f7
+    8489:	00 00                	add    %al,(%bx,%si)
+    848b:	e8 b5 fe             	call   8343 <loader_entry+0x21>
+    848e:	ff                   	(bad)  
+    848f:	ff 83 c4 04          	incw   0x4c4(%bp,%di)
+    8493:	0f b6 c0             	movzbw %al,%ax
+    8496:	25 88 00             	and    $0x88,%ax
+    8499:	00 00                	add    %al,(%bx,%si)
+    849b:	83 f8 08             	cmp    $0x8,%ax
+    849e:	75 e6                	jne    8486 <read_disk+0xe4>
+            
+        } //取出状态寄存器3位和7七位
+                                            //若 ！= 0x8即DRQ位为0,即非就绪状态
+                                            //或者BSY（7位）为1,即忙碌状态，都不可取
+
+        for(int i=0; i<SECTOR_SIZE / 2; ++i){
+    84a0:	c7 45 f4 00 00       	movw   $0x0,-0xc(%di)
+    84a5:	00 00                	add    %al,(%bx,%si)
+    84a7:	eb 1d                	jmp    84c6 <read_disk+0x124>
+            *(data_buf++) = inw(0x1F0);     //从数据寄存器读取16位数据，即 两个字节
+    84a9:	8b 5d f8             	mov    -0x8(%di),%bx
+    84ac:	8d 43 02             	lea    0x2(%bp,%di),%ax
+    84af:	89 45 f8             	mov    %ax,-0x8(%di)
+    84b2:	68 f0 01             	push   $0x1f0
+    84b5:	00 00                	add    %al,(%bx,%si)
+    84b7:	e8 a6 fe             	call   8360 <inb+0x1b>
+    84ba:	ff                   	(bad)  
+    84bb:	ff 83 c4 04          	incw   0x4c4(%bp,%di)
+    84bf:	66 89 03             	mov    %eax,(%bp,%di)
+        for(int i=0; i<SECTOR_SIZE / 2; ++i){
+    84c2:	83 45 f4 01          	addw   $0x1,-0xc(%di)
+    84c6:	81 7d f4 ff 00       	cmpw   $0xff,-0xc(%di)
+    84cb:	00 00                	add    %al,(%bx,%si)
+    84cd:	7e da                	jle    84a9 <read_disk+0x107>
+    while (sector_count--) {                
+    84cf:	0f b7 45 e8          	movzww -0x18(%di),%ax
+    84d3:	8d 50 ff             	lea    -0x1(%bx,%si),%dx
+    84d6:	66 89 55 e8          	mov    %edx,-0x18(%di)
+    84da:	66 85 c0             	test   %eax,%eax
+    84dd:	75 a6                	jne    8485 <read_disk+0xe3>
+        }
+       
+      
+    }
+
+}
+    84df:	90                   	nop
+    84e0:	90                   	nop
+    84e1:	8b 5d fc             	mov    -0x4(%di),%bx
+    84e4:	c9                   	leave  
+    84e5:	c3                   	ret    
+
+000084e6 <load_kernel>:
+
+
+
+void  load_kernel (void) {
+    84e6:	55                   	push   %bp
+    84e7:	89 e5                	mov    %sp,%bp
+    84e9:	83 ec 08             	sub    $0x8,%sp
+    read_disk(100, 500, (uint8_t *)SYS_KERNEL_LOAD_ADDR);            //读取磁盘
+    84ec:	68 00 00             	push   $0x0
+    84ef:	10 00                	adc    %al,(%bx,%si)
+    84f1:	68 f4 01             	push   $0x1f4
+    84f4:	00 00                	add    %al,(%bx,%si)
+    84f6:	6a 64                	push   $0x64
+    84f8:	e8 a5 fe             	call   83a0 <outb+0x1f>
+    84fb:	ff                   	(bad)  
+    84fc:	ff 83 c4 0c          	incw   0xcc4(%bp,%di)
+    ((void (*)(boot_info_t *))SYS_KERNEL_LOAD_ADDR)(&boot_info);                        //跳转到kernel入口
+    8500:	83 ec 0c             	sub    $0xc,%sp
+    8503:	68 80 a0             	push   $0xa080
+    8506:	00 00                	add    %al,(%bx,%si)
+    8508:	b8 00 00             	mov    $0x0,%ax
+    850b:	10 00                	adc    %al,(%bx,%si)
+    850d:	ff d0                	call   *%ax
+    850f:	83 c4 10             	add    $0x10,%sp
+    for(;;);
+    8512:	eb fe                	jmp    8512 <load_kernel+0x2c>

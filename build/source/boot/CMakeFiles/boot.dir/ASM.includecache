@@ -1,0 +1,14 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/odyssey/os/diy-x86os/start/start/source/boot/boot.h
+
+/home/odyssey/os/diy-x86os/start/start/source/boot/start.S
+boot.h
+/home/odyssey/os/diy-x86os/start/start/source/boot/boot.h
+
